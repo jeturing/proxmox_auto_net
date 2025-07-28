@@ -26,6 +26,11 @@ ID="$1"
 # VALIDAR PERMISOS
 [[ $EUID -ne 0 ]] && echo "[X] Ejecuta como root." && exit 1
 
+# ASEGURAR EXISTENCIA DEL LOG
+if [[ ! -f "$LOG_FILE" ]]; then
+  touch "$LOG_FILE"
+fi
+
 # ===============================================
 # AUTOACTUALIZACIÓN DESDE GITHUB
 # ===============================================
@@ -74,7 +79,7 @@ fi
 # ===============================================
 # CONFIGURAR DHCP PARA VMBR0
 # ===============================================
-if [[ ! -f "$DNSMASQ_CONF" ]] || ! grep -q "$BRIDGE" "$DNSMASQ_CONF" ]]; then
+if [[ ! -f "$DNSMASQ_CONF" ]] || ! grep -q "$BRIDGE" "$DNSMASQ_CONF"; then
   echo "[+] Configurando DHCP en $BRIDGE..."
   mkdir -p /etc/dnsmasq.d
   cat <<EOF > "$DNSMASQ_CONF"
@@ -132,7 +137,6 @@ fi
 assign_static_ip() {
   local ID="$1"; local TYPE SET_CMD START_CMD GET_HOSTNAME
   [[ -z "$ID" ]] && { echo "Uso: $0 <CT_ID|VM_ID>"; return 1; }
-
   if pct status "$ID" &>/dev/null; then
     TYPE="ct"; SET_CMD="pct set"; START_CMD="pct restart $ID"; GET_HOSTNAME="pct exec $ID -- hostname"
   elif qm status "$ID" &>/dev/null; then
@@ -140,27 +144,21 @@ assign_static_ip() {
   else
     echo "[X] ID $ID no válido"; return 1
   fi
-
   echo "[+] Buscando IP libre para $TYPE $ID..."
   for i in $(seq $STATIC_START $STATIC_END); do
     IP="$NETPREFIX.$i"
     grep -q "$IP" "$LOG_FILE" && continue
     ping -c1 -W1 "$IP" &>/dev/null && continue
-
-    # Saltar si ya tiene net0
     if [[ "$TYPE" == "ct" && $(pct config "$ID" | grep -c net0:) -gt 0 ]] || \
        [[ "$TYPE" == "vm" && $(qm config "$ID" | grep -c net0:) -gt 0 ]]; then
       echo "[!] $TYPE $ID ya tiene red. Saltando."; return
     fi
-
-    # Asignar red
     if [[ "$TYPE" == "ct" ]]; then
       $SET_CMD "$ID" -net0 name=eth0,bridge=$BRIDGE,ip="$IP/24",gw=$GATEWAY
     else
       $SET_CMD "$ID" -net0 model=virtio,bridge=$BRIDGE
       echo "[!] Configura IP $IP dentro de la VM."
     fi
-
     $START_CMD; sleep 5
     HOSTNAME=$($GET_HOSTNAME)
     echo "$(date '+%F %T') TYPE=$TYPE ID=$ID NAME=$HOSTNAME IP=$IP" >> "$LOG_FILE"
