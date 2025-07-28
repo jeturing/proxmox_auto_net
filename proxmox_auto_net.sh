@@ -2,7 +2,7 @@
 
 # ===============================================
 # Proxmox Auto Net - Jeturing Inc.
-# SCRIPT_VERSION: v1.0.0
+# SCRIPT_VERSION: v1.0.1
 # ===============================================
 
 # CONFIGURACIÓN GENERAL
@@ -113,7 +113,7 @@ if [[ ! -f "$SERVICE_PATH" ]]; then
   echo "[+] Instalando servicio systemd..."
   cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Proxmox Auto Network Bootstrap
+Description=Proxmox Auto Network Bootstrap By jeturing
 After=network.target
 
 [Service]
