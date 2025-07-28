@@ -20,12 +20,27 @@ ID="$1"
 echo "[+] Inicializando entorno de red Proxmox..."
 
 # 1. Instalar dnsmasq si falta
+# Validar resolución DNS antes de instalar paquetes
+if ! getent hosts deb.debian.org &>/dev/null; then
+  echo "[!] El sistema no puede resolver dominios DNS (ej. deb.debian.org)"
+  echo "[+] Agregando temporalmente nameserver 1.1.1.1 a /etc/resolv.conf..."
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  sleep 2
+  if ! getent hosts deb.debian.org &>/dev/null; then
+    echo "[X] Aún no hay resolución DNS. Aborta instalación de dnsmasq."
+    echo "    Verifica tu conectividad antes de continuar."
+    exit 1
+  fi
+fi
+
+# Instalar dnsmasq si no está
 if ! command -v dnsmasq &>/dev/null; then
   echo "[+] Instalando dnsmasq..."
   apt update && apt install -y dnsmasq
 else
   echo "[✓] dnsmasq ya instalado."
 fi
+
 
 # 2. Configurar dnsmasq para vmbr0 si no está
 if [[ ! -f "$DNSMASQ_CONF" ]] || ! grep -q "$BRIDGE" "$DNSMASQ_CONF"; then
