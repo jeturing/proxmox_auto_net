@@ -27,9 +27,7 @@ ID="$1"
 [[ $EUID -ne 0 ]] && echo "[X] Ejecuta como root." && exit 1
 
 # ASEGURAR EXISTENCIA DEL LOG
-if [[ ! -f "$LOG_FILE" ]]; then
-  touch "$LOG_FILE"
-fi
+[[ ! -f "$LOG_FILE" ]] && touch "$LOG_FILE"
 
 # ===============================================
 # AUTOACTUALIZACIÓN DESDE GITHUB
@@ -85,7 +83,9 @@ if [[ ! -f "$DNSMASQ_CONF" ]] || ! grep -q "$BRIDGE" "$DNSMASQ_CONF"; then
   cat <<EOF > "$DNSMASQ_CONF"
 interface=$BRIDGE
 bind-interfaces
+
 dhcp-range=$NETPREFIX.$DHCP_START,$NETPREFIX.$DHCP_END,255.255.255.0,12h
+
 dhcp-option=option:router,$GATEWAY
 dhcp-option=option:dns-server,$DNS
 EOF
@@ -137,6 +137,7 @@ fi
 assign_static_ip() {
   local ID="$1"; local TYPE SET_CMD START_CMD GET_HOSTNAME
   [[ -z "$ID" ]] && { echo "Uso: $0 <CT_ID|VM_ID>"; return 1; }
+  # Detectar tipo de guest
   if pct status "$ID" &>/dev/null; then
     TYPE="ct"; SET_CMD="pct set"; START_CMD="pct restart $ID"; GET_HOSTNAME="pct exec $ID -- hostname"
   elif qm status "$ID" &>/dev/null; then
@@ -145,19 +146,28 @@ assign_static_ip() {
     echo "[X] ID $ID no válido"; return 1
   fi
   echo "[+] Buscando IP libre para $TYPE $ID..."
+
+  # Forzar reasignación si ya existe net0
+  if [[ "$TYPE" == "ct" && $(pct config "$ID" | grep -c net0:) -gt 0 ]] || \
+     [[ "$TYPE" == "vm" && $(qm config "$ID" | grep -c net0:) -gt 0 ]]; then
+    read -p "[?] $TYPE $ID ya tiene red. Forzar reasignación? [y/N] " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+      echo "[!] Eliminando configuración anterior de net0..."
+      $SET_CMD "$ID" -delete net0
+    else
+      echo "[!] Saltando asignación para $TYPE $ID."; return
+    fi
+  fi
+
+  # Asignar IP en rango
   for i in $(seq $STATIC_START $STATIC_END); do
     IP="$NETPREFIX.$i"
     grep -q "$IP" "$LOG_FILE" && continue
     ping -c1 -W1 "$IP" &>/dev/null && continue
-    if [[ "$TYPE" == "ct" && $(pct config "$ID" | grep -c net0:) -gt 0 ]] || \
-       [[ "$TYPE" == "vm" && $(qm config "$ID" | grep -c net0:) -gt 0 ]]; then
-      echo "[!] $TYPE $ID ya tiene red. Saltando."; return
-    fi
     if [[ "$TYPE" == "ct" ]]; then
       $SET_CMD "$ID" -net0 name=eth0,bridge=$BRIDGE,ip="$IP/24",gw=$GATEWAY
     else
-      $SET_CMD "$ID" -net0 model=virtio,bridge=$BRIDGE
-      echo "[!] Configura IP $IP dentro de la VM."
+      $SET_CMD "$ID" -net0 model=virtio,bridge=$BRIDGE,ip="$IP/24",gw=$GATEWAY
     fi
     $START_CMD; sleep 5
     HOSTNAME=$($GET_HOSTNAME)
