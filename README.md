@@ -1,10 +1,6 @@
-¡Claro! Aquí tienes el `README.md` profesional **en un solo bloque**, listo para copiar y pegar directamente en tu repositorio [`proxmox_auto_net`](https://github.com/jeturing/proxmox_auto_net).
-
----
-
 ### 📄 Contenido completo para `README.md`
 
-````markdown
+
 <h1 align="center">🔧 Proxmox Auto Network</h1>
 <p align="center">
   Automatización inteligente de red para <strong>Proxmox VE</strong> con IP estática/dinámica, DHCP, NAT y persistencia.
