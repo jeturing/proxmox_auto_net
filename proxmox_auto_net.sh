@@ -18,6 +18,32 @@ ID="$1"
 [[ $EUID -ne 0 ]] && echo "[X] Ejecuta como root." && exit 1
 
 echo "[+] Inicializando entorno de red Proxmox..."
+# AUTOACTUALIZACIÓN DESDE GITHUB
+REPO_RAW="https://raw.githubusercontent.com/jeturing/proxmox_auto_net/main/proxmox_auto_net.sh"
+LOCAL_SCRIPT="/usr/local/bin/proxmox_auto_net.sh"
+TMP_SCRIPT="/tmp/proxmox_auto_net_latest.sh"
+
+echo "[~] Verificando actualizaciones del script en GitHub..."
+
+if curl --output /dev/null --silent --head --fail "$REPO_RAW"; then
+  curl -s -o "$TMP_SCRIPT" "$REPO_RAW"
+  chmod +x "$TMP_SCRIPT"
+  
+  LOCAL_HASH=$(sha256sum "$LOCAL_SCRIPT" | cut -d ' ' -f1)
+  REMOTE_HASH=$(sha256sum "$TMP_SCRIPT" | cut -d ' ' -f1)
+
+  if [[ "$LOCAL_HASH" != "$REMOTE_HASH" ]]; then
+    echo "[↑] Se detectó una nueva versión. Actualizando script..."
+    cp "$TMP_SCRIPT" "$LOCAL_SCRIPT"
+    chmod +x "$LOCAL_SCRIPT"
+    echo "[✔] Script actualizado. Reiniciando ejecución..."
+    exec "$LOCAL_SCRIPT" "$@"
+  else
+    echo "[✓] El script ya está actualizado."
+  fi
+else
+  echo "[!] No se pudo verificar actualizaciones (sin acceso a GitHub o conexión limitada)."
+fi
 
 # 1. Instalar dnsmasq si falta
 # Validar resolución DNS antes de instalar paquetes
